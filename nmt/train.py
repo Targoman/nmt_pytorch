@@ -221,7 +221,7 @@ def train(
                 teacher_forcing=teacher_forcing
             )
             token_count = y_mask[:, :, 1:].sum().item()
-            loss = loss_function(log_probs, batch[1][:, 1:], model.get_target_embeddings()) / token_count
+            loss = loss_function(log_probs, batch[1][:, 1:], batch[0], model) / token_count
             loss.backward()
 
             optimizer.step()
@@ -235,7 +235,7 @@ def train(
             if step > 0 and step % report_interval_steps == 0:
                 elapsed_time = time.time() - start_time
                 baseline_loss = loss_function.uniform_baseline_loss(
-                    log_probs, batch[1][:, 1:]
+                    log_probs, batch[1][:, 1:], batch[0], model
                 )
                 logger.info(
                     'Epoch_{} Step_{}: loss={:.3f}(vs {:.3f} uniform), tokens/s={:.1f}, lr={}'

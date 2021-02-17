@@ -78,6 +78,7 @@ def configured(parent_configuration: str = None):
             return f(*args, **params)
 
         configured_f.__name__ = f.__name__
+        configured_f.__original__ = f
 
         return configured_f
 
@@ -96,6 +97,7 @@ def configured(parent_configuration: str = None):
                 c.__init__(self, *args, **params)
 
         configured_c.__name__ = c.__name__
+        configured_c.__original__ = c
 
         return configured_c
 

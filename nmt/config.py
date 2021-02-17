@@ -5,7 +5,6 @@ Configuration manager
 
 from typing import Any, T
 
-
 class Configuration(object):
     def __init__(self, parent: T = None, name: str = '__root__'):
         self.__dict__['parent'] = parent

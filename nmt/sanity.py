@@ -22,7 +22,7 @@ def check_smooth_cross_entropy_loss(logger):
             pad_index=pad_index, smoothing_amount=alpha
         )
 
-        targets = torch.arange(n, dtype=torch.long)
+        targets = torch.cat((torch.LongTensor([0]), torch.arange(n, dtype=torch.long)), dim=0)
         target_probs = (
             (1 - alpha) - alpha / (n - (2 if pad_index is not None else 1))
         ) * torch.eye(n) + alpha / (n - (2 if pad_index is not None else 1)
@@ -32,7 +32,7 @@ def check_smooth_cross_entropy_loss(logger):
 
         log_probs = torch.nn.functional.log_softmax(torch.rand(n, n), -1)
 
-        loss = loss_function(log_probs, targets)
+        loss = loss_function(log_probs, [None, targets], None)
         sane_loss = -(target_probs * log_probs).sum()
         if alpha > 0.0:
             sane_loss += (target_probs * target_probs.log()).sum()
