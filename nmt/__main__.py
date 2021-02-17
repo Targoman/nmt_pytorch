@@ -8,7 +8,7 @@ import json
 import shutil
 import argparse
 
-from nmt.common import configuration, make_logger, logger
+from nmt.common import configuration, configuration_file_path, make_logger, logger
 from nmt.dataset import prepare_data, get_validation_dataset, get_test_dataset
 from nmt.model import get_model_short_description, get_model_source_code_path
 from nmt.train import train
@@ -90,6 +90,7 @@ def main():
     if args.mode != 'save_config':
         with open(args.config_path) as f:
             configuration.load(json.load(f))
+            configuration_file_path = os.path.dirname(args.config_path)
         update_and_ensure_model_output_path(args.mode, args.index)
         make_logger()
 

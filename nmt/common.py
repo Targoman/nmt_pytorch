@@ -22,6 +22,7 @@ EOS_TOKEN = '</s>'
 epsilon = 1e-6
 
 configuration = Configuration()
+configuration_file_path = None
 
 class IgnoreMeta(type):
     def __getitem__(cls, val):

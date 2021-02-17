@@ -13,7 +13,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from nmt.common import Ignore, configuration, configured, get_device
+from nmt.common import Ignore, configuration, configuration_file_path, configured, get_device
 from nmt.predict import get_vocabularies, find_best_model
 from nmt.model import build_model
 
@@ -84,7 +84,12 @@ class TeacherStudentLoss(nn.Module):
         assert os.path.exists(teacher_config_path), "Teacher model config does not exist."
         nn.Module.__init__(self)
         teacher_model_config = copy.deepcopy(configuration)
-        with open(teacher_config_path) as f:
+        with open(
+                os.path.relpath(
+                    teacher_config_path,
+                    configuration_file_path
+                )
+            ) as f:
             teacher_model_config.load(json.load(f))
         best_model_path = find_best_model.__original__(
             teacher_model_config.model.output_path
