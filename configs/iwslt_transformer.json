@@ -1,0 +1,71 @@
+{
+    "model": {
+        "output_path": "./results/",
+        "type": "transformer",
+        "transformer": {
+            "n_encoders": 6,
+            "n_decoders": 6,
+            "num_heads": 4,
+            "embedding_size": 256,
+            "ffn_size": 1024,
+            "dropout": 0.3,
+            "emb_dropout": 0.0
+        }
+    },
+    "data": {
+        "train_root_path": "./data/iwslt14/train.bpe.32000",
+        "validation_root_path": "./data/iwslt14/valid.bpe.32000",
+        "test_root_path": "./data/iwslt14/test.bpe.32000",
+        "src_lang_code": "de",
+        "tgt_lang_code": "en",
+        "src_lowercase": true,
+        "tgt_lowercase": true,
+        "src_normalizer": "default",
+        "tgt_normalizer": "default",
+        "src_tokenizer": "default",
+        "tgt_tokenizer": "default",
+        "shared_vocabulary": true
+    },
+    "train": {
+        "schedule_mode": "none",
+        "smoothing_amount": 0.2,
+        "type": "smoothed_cross_entropy",
+        "embed_init": "normal",
+        "embed_init_gain": 1.0,
+        "embed_init_scale": 0.01,
+        "weight_init": "xavier",
+        "weight_init_gain": 1.0,
+        "weight_init_scale": 0.01,
+        "bias_init": "xavier",
+        "bias_init_gain": 1.0,
+        "bias_init_scale": 0.01,
+        "max_steps": 120000,
+        "batch_size_limit": 4096,
+        "batch_limit_by_tokens": true,
+        "report_interval_steps": 100,
+        "validation_interval_steps": 1000,
+        "lr_scheduler_at": "every_step",
+        "n_ckpts_to_keep": 3,
+        "teacher_forcing": true,
+        "use_gpu": true,
+        "optimizer": {
+            "type": "adam",
+            "lr": 0.0003,
+            "betas": [
+                0.9,
+                0.999
+            ],
+            "eps": 1e-07,
+            "weight_decay": 0.0
+        },
+        "noam_scheduler": {
+            "embedding_size": 256,
+            "factor": 1e4,
+            "warmup_steps": 4000
+        }
+    },
+    "search": {
+        "beam_size": 3,
+        "max_target_length": 80
+    }
+}

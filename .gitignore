@@ -1,0 +1,7 @@
+.vscode
+*.py[cod]
+__pycache__
+data
+unprocessed
+scratch
+results
