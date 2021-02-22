@@ -4,7 +4,6 @@ Loss functions for neural machine translation
 """
 
 import os
-import copy
 import json
 import math
 
@@ -13,9 +12,11 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from nmt.common import Ignore, configuration, configuration_file_path, configured, get_device
+from nmt.common import Ignore, get_configuration, push_configuration,\
+                       pop_configuration, relative_to_config_path,\
+                       configured, get_device
 from nmt.predict import get_vocabularies, find_best_model
-from nmt.model import build_model
+from nmt.model import build_model, update_and_ensure_model_output_path
 
 @configured('train')
 class SmoothedCrossEntropyLoss(nn.Module):
@@ -81,48 +82,58 @@ class SmoothedCrossEntropyLoss(nn.Module):
 @configured('train')
 class TeacherStudentLoss(nn.Module):
     def __init__(self, pad_index: Ignore[int], teacher_config_path: str = '/DOES_NOT_EXIST'):
+        teacher_config_path = relative_to_config_path(teacher_config_path)
         assert os.path.exists(teacher_config_path), "Teacher model config does not exist."
         nn.Module.__init__(self)
-        teacher_model_config = copy.deepcopy(configuration)
-        with open(
-                os.path.relpath(
-                    teacher_config_path,
-                    configuration_file_path
-                )
-            ) as f:
+        teacher_model_config = get_configuration().clone()
+        with open(teacher_config_path) as f:
             teacher_model_config.load(json.load(f))
-        best_model_path = find_best_model.__original__(
-            teacher_model_config.model.output_path
-        )
+
+        push_configuration(teacher_model_config)
+        update_and_ensure_model_output_path('test', None)
+
+        best_model_path = find_best_model()
+        if best_model_path is None:
+            raise ValueError('Could not find the teacher model.')
         (src_vocab, tgt_vocab), _ = get_vocabularies()
-        self.teacher_model = build_model.__original__(
-            src_vocab,
-            tgt_vocab,
-            teacher_model_config.model.type
-        )
+        self.teacher_model = build_model(src_vocab, tgt_vocab)
         state_dict = torch.load(best_model_path)
         self.teacher_model.load_state_dict(state_dict['model_state'])
         self.teacher_model.to(get_device())
         self.teacher_model.eval()
+        self.src_pad_index = src_vocab.pad_index
+        self.tgt_pad_index = tgt_vocab.pad_index
+
+        pop_configuration()
 
         self.pad_index = pad_index
 
     def uniform_baseline_loss(self, log_probs, batch, model):
         return math.nan
 
+    def get_teacher_probs(self, batch):
+        with torch.no_grad():
+            x_mask = batch[0] != self.src_pad_index
+            x_mask = x_mask.unsqueeze(1)
+            y_mask = batch[1][:, :-1] != self.tgt_pad_index
+            y_mask = y_mask.unsqueeze(1)
+            x_e = self.teacher_model.encode(batch[0], x_mask)
+            teacher_probs = self.teacher_model.decode(
+                batch[1][:, :-1],
+                x_e,
+                y_mask,
+                x_mask,
+                teacher_forcing=False
+            ).exp()
+        return teacher_probs, y_mask
+
     # pylint: disable=arguments-differ
     def forward(self, log_probs, batch, model):
-        x_mask = batch[0] != model.src_vocab.pad_index
-        y_mask = batch[1][:, :-1] != model.tgt_vocab.pad_index
-        x_e = self.teacher_model.encode(batch[0], x_mask)
-        teacher_probs = self.teacher_model.decode(
-            batch[1][:, :-1],
-            x_e,
-            y_mask.unsqueeze(1),
-            x_mask.unsqueeze(1),
-            teacher_forcing=False
-        ).exp()
-        return -(teacher_probs * log_probs).mean()
+        teacher_probs, y_mask = self.get_teacher_probs(batch)
+        loss = teacher_probs * log_probs
+        loss = -loss.view(-1, loss.size(-1))
+        loss = loss[y_mask.view(-1), :].sum()
+        return loss
 
 @configured('train')
 def get_loss_function(

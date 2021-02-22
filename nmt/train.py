@@ -30,6 +30,7 @@ def initialize(
     embed_init: str = 'normal',
     embed_init_gain: float = 1.0,
     embed_init_scale: float = 0.01,
+    embed_teacher_model_path: str = '', 
     weight_init: str = 'xavier',
     weight_init_gain: float = 1.0,
     weight_init_scale: float = 0.01,
@@ -37,11 +38,27 @@ def initialize(
     bias_init_gain: float = 1.0,
     bias_init_scale: float = 0.01
 ):
+
+    def init_teacher_(model_emb, teacher_emb):
+        assert model_emb.size(0) == teacher_emb.size(0), "Vocabulary sizes are different."
+        if model_emb.size(1) == teacher_emb.size(1):
+            model_emb.copy_(teacher_emb.to(model_emb.device))
+        elif model_emb.size(1) > teacher_emb.size(1):
+            model_emb.narrow(1, 0, teacher_emb.size(1)).copy_(teacher_emb.to(model_emb.device))
+        else:
+            teacher_emb = teacher_emb.to(get_device())
+            print(teacher_emb.size())
+            print(torch.matmul(teacher_emb.t(), teacher_emb).size())
+            _, phi = torch.symeig(torch.matmul(teacher_emb.t(), teacher_emb), eigenvectors=True)
+            model_emb.copy_(torch.matmul(teacher_emb, phi[:, :model_emb.size(1)]).to(model_emb.device))    
+
     def __create_initializer(method, scale, gain):
         if method == 'xavier':
             return lambda p: nn.init.xavier_normal_(p, gain)
         elif method == 'normal':
             return lambda p: nn.init.normal_(p, std=scale)
+        elif method == 'teacher':
+            return None
         else:
             raise RuntimeError('Invalid initializer `{}`.'.format(method))
 
@@ -53,17 +70,33 @@ def initialize(
     )
     init_bias = __create_initializer(bias_init, bias_init_scale, bias_init_gain)
 
+    if init_embed_weights is None:
+        state = torch.load(embed_teacher_model_path)
+        src_embed_weights = state['model_state']['src_embed.weight']
+        if 'tgt_embed__.weight' in state['model_state']:
+            tgt_embed_weights = state['model_state']['tgt_embed__.weight']
+        else:
+            tgt_embed_weights = state['model_state']['src_embed.weight']
+        
     with torch.no_grad():
         for name, p in model.named_parameters():
             if "embed" in name:
-                if p.dim() > 1:
-                    init_embed_weights(p.data)
+                if init_embed_weights is not None:
+                    if p.dim() > 1:
+                        init_embed_weights(p.data)
+                    else:
+                        nn.init.zeros_(p.data)
+                    if "src" in name:
+                        p.data[model.src_vocab.pad_index].zero_()
+                    elif "tgt" in name:
+                        p.data[model.tgt_vocab.pad_index].zero_()
                 else:
-                    nn.init.zeros_(p.data)
-                if "src" in name:
-                    p.data[model.src_vocab.pad_index].zero_()
-                elif "tgt" in name:
-                    p.data[model.tgt_vocab.pad_index].zero_()
+                    if "src" in name:
+                        init_teacher_(p.data, teacher_emb=src_embed_weights)
+                    elif "tgt" in name:
+                        init_teacher_(p.data, teacher_emb=tgt_embed_weights)
+                    else:
+                        nn.init.zeros_(p.data)
             elif "bias" in name:
                 if p.dim() > 1:
                     init_bias(p.data)
@@ -221,7 +254,7 @@ def train(
                 teacher_forcing=teacher_forcing
             )
             token_count = y_mask[:, :, 1:].sum().item()
-            loss = loss_function(log_probs, batch[1][:, 1:], batch[0], model) / token_count
+            loss = loss_function(log_probs, batch, model) / token_count
             loss.backward()
 
             optimizer.step()
@@ -235,7 +268,7 @@ def train(
             if step > 0 and step % report_interval_steps == 0:
                 elapsed_time = time.time() - start_time
                 baseline_loss = loss_function.uniform_baseline_loss(
-                    log_probs, batch[1][:, 1:], batch[0], model
+                    log_probs, batch, model
                 )
                 logger.info(
                     'Epoch_{} Step_{}: loss={:.3f}(vs {:.3f} uniform), tokens/s={:.1f}, lr={}'

@@ -8,9 +8,9 @@ from typing import Any, Tuple
 from torch.nn import Parameter
 from torch.optim import Optimizer, Adam
 from torch.optim.lr_scheduler import _LRScheduler, ReduceLROnPlateau, StepLR, ExponentialLR
-from nmt.common import configuration, configured
+from nmt.common import get_configuration, configured
 
-configuration.ensure_submodule('train').ensure_submodule('optimizer'
+get_configuration().ensure_submodule('train').ensure_submodule('optimizer'
                                                         ).ensure_param(
                                                             'type', 'adam'
                                                         )
@@ -38,13 +38,13 @@ def build_optimizer(params: Any):
 
     OPTIMIZERS = {'adam': get_adam_optimizer}
 
-    type_ = configuration.ensure_submodule('train'
-                                          ).ensure_submodule('optimizer').type
+    type_ = get_configuration().\
+            ensure_submodule('train').\
+            ensure_submodule('optimizer').type
     if type_ not in OPTIMIZERS:
         raise Exception('Optimizer `{}` is not registered.'.format(type_))
 
     return OPTIMIZERS[type_]()
-
 
 class NoamScheduler(_LRScheduler):
     def __init__(

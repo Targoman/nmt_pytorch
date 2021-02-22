@@ -13,9 +13,7 @@ class Configuration(object):
         self.__dict__['__parameters'] = {}
 
     def fullname(self):
-
         path = []
-
         node = self
         while node is not None:
             path.append(node.name)
@@ -92,10 +90,21 @@ class Configuration(object):
             if "value" in parameters[name] else \
             parameters[name]["default"]
 
+    def clone(self, new_parent = None):
+        assert self.parent is None or new_parent is not None, "Clone is allowed only for the root configuration."
+        cloned_config = Configuration(new_parent, self.name)
+        for k, v in self.__dict__['__submodules'].items():
+            cloned_config.__dict__['__submodules'][k] = v.clone(cloned_config)
+        for k, v in self.__dict__['__parameters'].items():
+            cloned_config.__dict__['__parameters'][k] = vv = {}
+            for kk in v:
+                vv[kk] = v[kk]
+            
+        return cloned_config
+
     def __repr__(self):
         submodules = self.__dict__['__submodules']
         parameters = self.__dict__['__parameters']
-
         result = {k: v for k, v in parameters.items()}
         result.update({k: v for k, v in submodules.items()})
 

@@ -22,7 +22,30 @@ EOS_TOKEN = '</s>'
 epsilon = 1e-6
 
 configuration = Configuration()
+def get_configuration():
+    global configuration
+    return configuration
+
+configuration_stack = []
+def push_configuration(new_configuration):
+    global configuration, configuration_stack
+    configuration_stack.append(configuration)
+    configuration = new_configuration
+
+def pop_configuration():
+    global configuration, configuration_stack
+    configuration = configuration_stack.pop()
+
 configuration_file_path = None
+def set_configuration_file_path(path: str):
+    global configuration_file_path
+    configuration_file_path = path
+
+def relative_to_config_path(path: str):
+    global configuration_file_path
+    if path.startswith('/'):
+        return path
+    return os.path.abspath(os.path.join(configuration_file_path, path))
 
 class IgnoreMeta(type):
     def __getitem__(cls, val):
@@ -35,20 +58,23 @@ class Ignore(object, metaclass=IgnoreMeta):
 
 def configured(parent_configuration: str = None):
 
-    global configuration
-    config_provider = configuration
-    if parent_configuration is not None:
-        path = parent_configuration.split('.')
-        for part in path:
-            config_provider = config_provider.ensure_submodule(part)
+    def get_config_provider(configuration):
+        config_provider = configuration
+        if parent_configuration is not None:
+            path = parent_configuration.split('.')
+            for part in path:
+                config_provider = config_provider.ensure_submodule(part)
+        return config_provider
 
     def register_params(parameter_specs):
+        global configuration
 
         ACCEPTABLE_TYPES = [
             int, bool, float, str, List[int], List[bool], List[float],
             List[str], Tuple[int], Tuple[bool], Tuple[float], Tuple[str]
         ]
 
+        config_provider = get_config_provider(configuration)
         param_names = []
 
         for param_name in parameter_specs:
@@ -71,6 +97,8 @@ def configured(parent_configuration: str = None):
         param_names = register_params(signature.parameters)
 
         def configured_f(*args, **kwargs):
+            global configuration
+            config_provider = get_config_provider(configuration)
             params = {
                 name: getattr(config_provider, name)
                 for name in param_names
@@ -90,6 +118,8 @@ def configured(parent_configuration: str = None):
 
         class configured_c(c):
             def __init__(self, *args, **kwargs):
+                global configuration
+                config_provider = get_config_provider(configuration)
                 params = {
                     name: getattr(config_provider, name)
                     for name in param_names

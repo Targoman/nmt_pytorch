@@ -14,7 +14,6 @@ from nmt.common import Ignore, configured, get_logger, get_device
 
 from nmt.dataset import Corpora, Vocabulary, Field
 from nmt.model import build_model
-from nmt.loss import get_loss_function
 from nmt.search import beam_search, short_sent_penalty
 from nmt.metric import update_metric_params, Metric, BleuMetric
 from nmt.encoderdecoder import EncoderDecoder
@@ -23,7 +22,11 @@ from nmt.encoderdecoder import EncoderDecoder
 @configured('model')
 def find_best_model(output_path: str):
     def get_score(path: str):
-        return float(path.split('_')[-1][:-3])
+        try:
+            result = float(path.split('_')[-1][:-3])
+        except ValueError:
+            return 0.0
+        return result
 
     best_model_path = None
     for model_path in (
@@ -168,6 +171,7 @@ def evaluate(
     logger = get_logger()
 
     if loss_function is None:
+        from nmt.loss import get_loss_function
         loss_function = get_loss_function(
             validation_dataset.fields[1].vocabulary.pad_index
         )
@@ -223,7 +227,7 @@ def evaluate(
                 teacher_forcing=teacher_forcing
             )
 
-            loss = loss_function(log_probs, validation_batch[1][:, 1:], model.get_target_embeddings())
+            loss = loss_function(log_probs, validation_batch, model)
             total_item_count += y_mask[:, :, 1:].sum().item()
             total_validation_loss += loss.item()
 

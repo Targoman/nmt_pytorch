@@ -84,9 +84,10 @@ class Vocabulary(object):
                 )
 
     def load_from_csv(self, input_path: str):
+        assert os.path.exists(input_path), f"Vocabulary CSV file does not exist ({input_path})."
         with open(input_path) as f:
             for l in f:
-                parts = l.strip().split('\t')
+                parts = l.rstrip('\n').split('\t')
                 self.stoi[parts[0]] = int(parts[1])
                 self.stof[parts[0]] = int(parts[2])
         self.itos = sorted(self.stoi.keys(), key=lambda e: self.stoi[e])
@@ -317,6 +318,7 @@ def get_train_dataset(
     tgt_normalizer: str = 'default',
     src_tokenizer: str = 'default',
     tgt_tokenizer: str = 'default',
+    force_vocab_update: bool = True,
     shared_vocabulary: bool = False
 ):
     logger = get_logger()
@@ -339,9 +341,27 @@ def get_train_dataset(
         vocabulary = Vocabulary()
 
     fields = [
-        Field(l, vocabulary, n, t, force_vocabulary_update=True)
+        Field(l, vocabulary, n, t, force_vocabulary_update=force_vocab_update)
         for l, n, t in field_specs
     ]
+
+    if not force_vocab_update:
+        logger.info('Not updating provided vocabularies ...')
+        if shared_vocabulary:
+            vocabulary.load_from_csv(
+                '{}/vocab.shared'.format(os.path.dirname(train_root_path))
+            )
+        else:
+            fields[0].vocabulary.load_from_csv(
+                '{}/vocab.{}'.format(
+                    os.path.dirname(train_root_path), src_lang_code
+                )
+            )
+            fields[1].vocabulary.load_from_csv(
+                '{}/vocab.{}'.format(
+                    os.path.dirname(train_root_path), tgt_lang_code
+                )
+            )
 
     corpora = Corpora(fields)
 
